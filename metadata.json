@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{"Name": "Custom"}],
+        "Category": "Tasks",
+        "Description": "Accordion Dock Plasmoid",
+        "Icon": "preferences-system-windows",
+        "Id": "org.kde.unityaccordiondock",
+        "License": "GPL-2.0+",
+        "Name": "Unity Accordion Dock",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": ["org.kde.plasma.multitaskmanager"]
+}
