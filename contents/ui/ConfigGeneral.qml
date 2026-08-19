@@ -5,13 +5,16 @@ import org.kde.kirigami as Kirigami
 
 Item {
     id: root
-    
+
     property alias cfg_invertFoldDirection: invertFoldCheckbox.checked
     property alias cfg_disableFolding: disableFoldingCheckbox.checked
     property alias cfg_enableHoverPop: hoverPopCheckbox.checked
     property alias cfg_hoverScrollSpeed: hoverScrollSpinbox.value
+    property alias cfg_maxTileSize: maxTileSizeSpinbox.value
     property alias cfg_iconSize: iconSizeSpinbox.value
     property alias cfg_enableGlassyBorders: glassyCheckbox.checked
+    property alias cfg_glassySize: glassySizeSpinbox.value
+    property alias cfg_glassyBorderMargin: borderMarginSpinbox.value
     property alias cfg_useDominantColor: domColorCheckbox.checked
     property alias cfg_indicatorStyle: indicatorStyleCombobox.currentIndex
 
@@ -33,7 +36,7 @@ Item {
             id: disableFoldingCheckbox
             text: "Disable 3D Folding (Use Flat Scrolling)"
         }
-        
+
         Controls.CheckBox {
             id: hoverPopCheckbox
             text: "Enable Hover Pop Animation"
@@ -51,6 +54,15 @@ Item {
         }
 
         Controls.SpinBox {
+            id: maxTileSizeSpinbox
+            Kirigami.FormData.label: "Max Tile Size:"
+            textFromValue: function(value, locale) { return value + " px"; }
+            from: 24
+            to: 256
+            value: 64
+        }
+
+        Controls.SpinBox {
             id: iconSizeSpinbox
             Kirigami.FormData.label: "Icon Size:"
             textFromValue: function(value, locale) { return value + " %"; }
@@ -61,6 +73,29 @@ Item {
         Controls.CheckBox {
             id: glassyCheckbox
             text: "Enable Glassy Borders"
+        }
+
+        Controls.SpinBox {
+            id: glassySizeSpinbox
+            Kirigami.FormData.label: "Glassy Border Size:"
+            textFromValue: function(value, locale) { return value + " %"; }
+            from: 10
+            to: 100
+            // 100% is the persistent default instead of the SpinBox minimum (10%).
+            value: 100
+            enabled: glassyCheckbox.checked
+        }
+
+        Controls.SpinBox {
+            id: borderMarginSpinbox
+            Kirigami.FormData.label: "Spacing Between Borders:"
+            from: 0
+            to: 50
+            // Stored in tenths of a pixel: 5 = 0.5 px.
+            value: 5
+            enabled: glassyCheckbox.checked
+            textFromValue: function(value, locale) { return (value / 10).toFixed(1) + " px"; }
+            valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 10); }
         }
 
         Controls.CheckBox {

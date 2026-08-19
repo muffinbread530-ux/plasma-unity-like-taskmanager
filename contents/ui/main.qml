@@ -20,7 +20,6 @@ PlasmoidItem {
     Layout.minimumWidth: isHorizontal ? 140 : 32
     Layout.minimumHeight: isHorizontal ? 32 : 140
     preferredRepresentation: fullRepresentation
-
     TaskManager.TasksModel {
         id: tasksModel
         filterByScreen: true
@@ -43,14 +42,17 @@ PlasmoidItem {
         }
     }
 
+    // full representation
     fullRepresentation: Item {
         id: dockContainer
         anchors.fill: parent
 
+        // configuration options
         readonly property bool foldingDisabled: plasmoid.configuration.disableFolding ?? false
         readonly property bool invertFold: plasmoid.configuration.invertFoldDirection ?? false
         readonly property bool enableHoverPop: plasmoid.configuration.enableHoverPop ?? true
 
+        // scroll state
         property real scrollOffset: 0
         Behavior on scrollOffset {
             NumberAnimation {
@@ -69,6 +71,7 @@ PlasmoidItem {
             id: dockHoverHandler
         }
 
+        // edge auto-scroll timer
         Timer {
             id: edgeScrollTimer
             interval: 16
@@ -96,6 +99,7 @@ PlasmoidItem {
             }
         }
 
+        // save launcher order
         function saveLauncherOrder() {
             let updatedLaunchers = [];
             for (let i = 0; i < taskRepeater.count; i++) {
@@ -112,33 +116,57 @@ PlasmoidItem {
             }
         }
 
+        // dock dimensions
         readonly property real dockW: root.width > 0 ? root.width : parent.width
         readonly property real dockH: root.height > 0 ? root.height : parent.height
-        readonly property real baseSize: Math.max(24, root.isHorizontal ? (dockH - 2) : (dockW - 2))
+
+        // tile sizing
+        readonly property real maxTileConfig: plasmoid.configuration.maxTileSize ?? 64
+        readonly property real panelThickness: root.isHorizontal ? (dockH - 2) : (dockW - 2)
+        readonly property real baseSize: Math.max(24, Math.min(panelThickness, maxTileConfig))
+
         readonly property real normalStep: baseSize + 4
         readonly property real tileRadius: baseSize * 0.12
+
+        // icon & glassy config
         readonly property real iconSizePct: (plasmoid.configuration.iconSize ?? 80) / 100.0
+        readonly property real glassySizePct: (plasmoid.configuration.glassySize ?? 100) / 100.0
+        readonly property real glassyBorderMargin: (plasmoid.configuration.glassyBorderMargin ?? 5) / 10.0
+
+        // stack length & folding metrics
         readonly property real stackLen: root.isHorizontal ? (stackArea.width > 0 ? stackArea.width : dockW) : (stackArea.height > 0 ? stackArea.height : dockH)
 
         readonly property bool isDockOverflowing: (tasksModel.count * normalStep) > stackLen
         readonly property bool autoFoldActive: !foldingDisabled && isDockOverflowing
 
-        readonly property real visualBottom: stackLen - (baseSize * 0.82)
-        readonly property real tiltDist: normalStep * 5.5
-        readonly property real bottomCompressionFactor: 0.85
+        // scroll limits
+        readonly property bool isFull: autoFoldActive
+        readonly property real maxScroll: autoFoldActive ? Math.max(0, ((tasksModel.count - 1) * normalStep) + baseSize - stackLen) : 0
+
+        // dynamic shift & positioning
+        readonly property real overflowCount: maxScroll > 0 ? (maxScroll / normalStep) : 0
+        readonly property real dynamicShift: Math.max(0, 2 - overflowCount) * (baseSize * 0.8)
+
+        readonly property real shortPanelFactor: Math.max(0.0, 1.0 - (stackLen / (normalStep * 6)))
+
+        readonly property real visualBottom: Math.min(stackLen - baseSize, stackLen - (baseSize * 0.8) + (dynamicShift * (1.0 - shortPanelFactor)))
+
+        readonly property real tiltDist: normalStep * Math.min(5.0, 1.2 + (overflowCount * 0.8) + (shortPanelFactor * 3.0))
+
+        readonly property real dynamicCompression: Math.min(0.95, (overflowCount * 0.45) + (shortPanelFactor * 0.85))
+        readonly property real bottomCompressionFactor: dynamicCompression
 
         readonly property real tiltStart: autoFoldActive ? Math.max(0, visualBottom - (tiltDist * (1.0 - 0.5 * bottomCompressionFactor))) : stackLen
         readonly property real endFoldBoundary: tiltStart + tiltDist
 
-        readonly property bool isFull: autoFoldActive
-        readonly property real maxScroll: autoFoldActive ? Math.max(0, ((tasksModel.count - 1) * normalStep) + baseSize - stackLen) : 0
-
+        // bottom unfold trigger
         readonly property bool atBottom: maxScroll > 0 && scrollOffset >= (maxScroll - 2)
         property real bottomUnfold: atBottom ? 1.0 : 0.0
         Behavior on bottomUnfold {
-            NumberAnimation { duration: 320; easing.type: Easing.OutBack; easing.overshoot: 1.15 }
+            NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.15 }
         }
 
+        // scroll helper
         function scrollToIndex(idx) {
             if (!autoFoldActive || idx < 0 || idx >= tasksModel.count) return;
             const visibleCenter = (tiltStart / 2) - (baseSize / 2);
@@ -154,6 +182,7 @@ PlasmoidItem {
             }
         }
 
+        // context menu
         Platform.Menu {
             id: contextMenu
             property int targetIndex: -1
@@ -230,6 +259,7 @@ PlasmoidItem {
             }
         }
 
+        // drag & drop target
         DropArea {
             anchors.fill: parent
             keys: ["text/x-plasmoid-servicename", "text/uri-list", "application/x-desktop"]
@@ -244,11 +274,13 @@ PlasmoidItem {
             }
         }
 
+        // icon container area
         Item {
             id: stackArea
             anchors.fill: parent
             clip: dockContainer.foldingDisabled
 
+            // task repeater
             Repeater {
                 id: taskRepeater
                 model: tasksModel
@@ -257,11 +289,14 @@ PlasmoidItem {
                     id: taskTile
                     required property int index
                     required property var model
+
+                    // spawn animation
                     property real spawnProgress: 0.0
                     Behavior on spawnProgress {
                         NumberAnimation { duration: 300; easing.type: Easing.OutBack; easing.overshoot: 1.5 }
                     }
 
+                    // reorder animation
                     property real animatedIndex: index
                     Behavior on animatedIndex {
                         enabled: dockContainer.draggingIndex === -1
@@ -270,6 +305,7 @@ PlasmoidItem {
 
                     property real dragOffset: 0
 
+                    // model properties
                     readonly property var iconSource: model ? (model.decoration || model.iconName || model.launcherUrl || "application-x-executable") : "application-x-executable"
 
                     readonly property string launcherUrl: {
@@ -310,6 +346,7 @@ PlasmoidItem {
                         return false;
                     }
 
+                    // index adjustments
                     readonly property real adjustedIndex: {
                         let dragIdx = dockContainer.draggingIndex;
                         let targetIdx = dockContainer.dropTargetIndex;
@@ -325,6 +362,7 @@ PlasmoidItem {
                         return index;
                     }
 
+                    // raw position math
                     readonly property real rawPos: {
                         let stdPos = (adjustedIndex * dockContainer.normalStep) - dockContainer.scrollOffset;
                         let lastIdx = tasksModel.count - 1;
@@ -337,6 +375,7 @@ PlasmoidItem {
 
                     readonly property real distFromCenter: Math.abs(rawPos - (dockContainer.tiltStart / 2))
 
+                    // fold boundaries
                     readonly property bool isFoldedStart: dockContainer.autoFoldActive && (rawPos < 0)
                     readonly property bool isFoldedEnd: dockContainer.autoFoldActive && (rawPos > dockContainer.endFoldBoundary)
 
@@ -347,10 +386,13 @@ PlasmoidItem {
                     readonly property real baseFoldFactorEnd: dockContainer.autoFoldActive ? Math.max(0.0, Math.min(1.0, (rawPos - dockContainer.tiltStart) / dockContainer.tiltDist)) : 0.0
                     readonly property real foldFactorEnd: baseFoldFactorEnd * (1.0 - dockContainer.bottomUnfold)
 
+                    // bottom tilt offset
                     readonly property real bottomTiltOffset: dockContainer.tiltDist * (baseFoldFactorEnd - 0.5 * dockContainer.bottomCompressionFactor * Math.pow(baseFoldFactorEnd, 2))
-                    readonly property real endFoldIndex: isFoldedEnd ? ((rawPos - dockContainer.endFoldBoundary) / dockContainer.normalStep) : 0
-                    readonly property real endPos: dockContainer.visualBottom + (endFoldIndex * (dockContainer.baseSize * 0.05))
 
+                    readonly property real endFoldIndex: isFoldedEnd ? ((rawPos - dockContainer.endFoldBoundary) / dockContainer.normalStep) : 0
+                    readonly property real endPos: dockContainer.visualBottom + (endFoldIndex * (dockContainer.baseSize * 0.06))
+
+                    // final positions
                     readonly property real staticPos: {
                         if (!dockContainer.autoFoldActive) return rawPos;
                         if (isFoldedStart) return startPos;
@@ -363,6 +405,7 @@ PlasmoidItem {
 
                     readonly property real finalPos: dockContainer.invertFold ? (dockContainer.stackLen - dockContainer.baseSize - staticPos) : staticPos
 
+                    // edge fade opacity
                     readonly property real edgeFadeOpacity: {
                         if (dockContainer.autoFoldActive) return 1.0;
                         if (rawPos < 0) return Math.max(0.0, 1.0 + (rawPos / dockContainer.normalStep));
@@ -380,8 +423,8 @@ PlasmoidItem {
                         return (rawPos - fadeEnd) / (fadeStart - fadeEnd);
                     }
 
-                    readonly property real endFadeStartRaw: dockContainer.endFoldBoundary + (dockContainer.normalStep * 2.8)
-                    readonly property real endFadeEndRaw: dockContainer.endFoldBoundary + (dockContainer.normalStep * 4.5)
+                    readonly property real endFadeStartRaw: dockContainer.endFoldBoundary + (dockContainer.normalStep * 0.5)
+                    readonly property real endFadeEndRaw: dockContainer.endFoldBoundary + (dockContainer.normalStep * 6.4)
                     readonly property real endEdgeOpacity: {
                         if (!isFoldedEnd) return 1.0;
                         let op = 1.0;
@@ -396,19 +439,27 @@ PlasmoidItem {
                         if (!dockContainer.autoFoldActive) return edgeFadeOpacity;
                         return Math.min(startEdgeOpacity, endEdgeOpacity);
                     }
-                    readonly property real baseAngle: (foldFactorEnd * 50) - (foldFactorStart * 68)
+
+                    // tilt angle calculation
+                    readonly property real tiltSpreadExponent: Math.max(1.0, 1.8 - (dockContainer.overflowCount * 0.2))
+                    readonly property real dynamicBottomAngle: Math.min(40, 10 + (dockContainer.overflowCount * 8))
+                    readonly property real safeFoldEnd: Math.max(0.0, foldFactorEnd)
+
+                    readonly property real baseAngle: (Math.pow(safeFoldEnd, tiltSpreadExponent) * dynamicBottomAngle) - (foldFactorStart * 40)
                     readonly property real targetAngle: (index === dockContainer.draggingIndex || !dockContainer.autoFoldActive) ? 0 : (dockContainer.invertFold ? -baseAngle : baseAngle)
 
+                    // tile scaling
                     readonly property real targetScale: {
                         if (index === dockContainer.draggingIndex) return 1.12;
                         if (!dockContainer.autoFoldActive) return 1.0;
-                        let foldScale = 1.0 - (foldFactorStart * 0.25) - (foldFactorEnd * 0.15);
+                        let foldScale = 1.0 - (foldFactorStart * 0.0) - (foldFactorEnd * 0.0);
                         return Math.max(0.75, foldScale);
                     }
 
                     readonly property bool isFullyUnfolded: foldFactorStart < 0.05 && foldFactorEnd < 0.05
                     readonly property bool isHovered: tileMouseArea.containsMouse && !edgeScrollTimer.running && dockContainer.draggingIndex === -1 && isFullyUnfolded
 
+                    // hover & click scale animation
                     property real interactionScale: {
                         if (tileMouseArea.pressed && !tileMouseArea.isTileDragging) return 0.85;
                         if (dockContainer.enableHoverPop && isHovered) return 1.15;
@@ -418,10 +469,16 @@ PlasmoidItem {
                         NumberAnimation { duration: 250; easing.type: Easing.OutBack; easing.overshoot: 2.5 }
                     }
 
+                    // tilt animation
                     property real animatedAngle: targetAngle
+                    Behavior on animatedAngle {
+                        NumberAnimation { duration: 0; easing.type: Easing.OutQuad }
+                    }
+
                     property real animatedScale: targetScale * spawnProgress * interactionScale
                     property real animatedOpacity: targetOpacity * Math.min(1.0, spawnProgress * 2.0)
 
+                    // tile layout & layering
                     opacity: animatedOpacity
                     width: dockContainer.baseSize
                     height: dockContainer.baseSize
@@ -431,6 +488,7 @@ PlasmoidItem {
 
                     z: (index === dockContainer.draggingIndex) ? 9999 : (isHovered ? 9998 : (5000 - index))
 
+                    // rotation & scale transform
                     transform: [
                         Rotation {
                             origin.x: dockContainer.baseSize / 2
@@ -446,10 +504,12 @@ PlasmoidItem {
                         }
                     ]
 
+                    // tile visuals
                     Item {
                         id: tileBg
                         anchors.fill: parent
 
+                        // icon component
                         Kirigami.Icon {
                             id: appIcon
                             anchors.centerIn: parent
@@ -458,16 +518,20 @@ PlasmoidItem {
                             source: taskTile.iconSource
                         }
 
+                        // dominant color extractor
                         Kirigami.ImageColors {
                             id: iconColors
                             source: appIcon
                         }
 
+                        // glassy border overlay
                         Rectangle {
                             visible: plasmoid.configuration.enableGlassyBorders
-                            anchors.fill: parent
-                            anchors.margins: -0.9
-                            radius: dockContainer.tileRadius + 0.9
+                            anchors.centerIn: parent
+                            width: parent.width * dockContainer.glassySizePct
+                            height: parent.height * dockContainer.glassySizePct
+                            radius: (dockContainer.tileRadius + 0.9) * dockContainer.glassySizePct
+
                             border.width: 0.5
                             border.color: Qt.rgba(1, 1, 1, 0.38)
 
@@ -479,15 +543,17 @@ PlasmoidItem {
                             }
 
                             Rectangle {
+                                visible: dockContainer.glassyBorderMargin > 0
                                 anchors.fill: parent
-                                anchors.margins: 0.5
-                                radius: parent.radius - 0.5
+                                anchors.margins: dockContainer.glassyBorderMargin
+                                radius: parent.radius - dockContainer.glassyBorderMargin
                                 color: "transparent"
                                 border.width: 0.5
                                 border.color: Qt.rgba(0, 0, 0, 0.15)
                             }
                         }
 
+                        // audio badge (still broken)
                         Rectangle {
                             visible: taskTile.isPlayingAudio
                             width: dockContainer.baseSize * 0.35
@@ -509,6 +575,7 @@ PlasmoidItem {
                             }
                         }
 
+                        // notification badge (also broken lmao)
                         Rectangle {
                             visible: taskTile.notificationCount > 0
                             width: dockContainer.baseSize * 0.4
@@ -532,6 +599,7 @@ PlasmoidItem {
                             }
                         }
 
+                        // active window indicator
                         Item {
                             id: indicatorContainer
                             visible: taskTile.isRunning
@@ -614,10 +682,11 @@ PlasmoidItem {
                         }
                     }
 
+                    // mouse interaction & reordering
                     MouseArea {
                         id: tileMouseArea
                         anchors.fill: parent
-                        enabled: taskTile.isFullyUnfolded // <--- THE MAGIC FIX
+                        enabled: true
                         hoverEnabled: true
                         cursorShape: isTileDragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
@@ -676,7 +745,7 @@ PlasmoidItem {
                                     if (taskTile.isGroup) {
                                         let childCount = tasksModel.rowCount(idx);
                                         if (childCount > 0) {
-                                            // Get the most recently used child window in the group
+                                            // window toggle logic
                                             let firstChildIdx = tasksModel.index(0, 0, idx);
                                             if (taskTile.isActiveWin) {
                                                 tasksModel.requestToggleMinimized(firstChildIdx);
