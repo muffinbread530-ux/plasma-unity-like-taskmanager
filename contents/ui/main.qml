@@ -52,8 +52,16 @@ PlasmoidItem {
         readonly property bool invertFold: plasmoid.configuration.invertFoldDirection ?? false
         readonly property bool enableHoverPop: plasmoid.configuration.enableHoverPop ?? true
 
-        // scroll state
+        // scroll state & speed tracking
         property real scrollOffset: 0
+        property real lastScrollOffset: 0
+        property real scrollVelocity: 0
+
+        onScrollOffsetChanged: {
+            scrollVelocity = scrollOffset - lastScrollOffset;
+            lastScrollOffset = scrollOffset;
+        }
+
         Behavior on scrollOffset {
             NumberAnimation {
                 duration: 250
@@ -62,13 +70,21 @@ PlasmoidItem {
         }
 
         property real targetScrollOffset: 0
+
         property int draggingIndex: -1
         property int dropTargetIndex: -1
         readonly property bool isReordering: draggingIndex !== -1
         property real hoverScrollSpeed: plasmoid.configuration.hoverScrollSpeed ?? 14
 
+        // Reset scroll to 0 when mouse leaves the dock
         HoverHandler {
             id: dockHoverHandler
+            onHoveredChanged: {
+                if (!hovered) {
+                    dockContainer.targetScrollOffset = 0;
+                    dockContainer.scrollOffset = 0;
+                }
+            }
         }
 
         // edge auto-scroll timer
@@ -163,7 +179,7 @@ PlasmoidItem {
         readonly property bool atBottom: maxScroll > 0 && scrollOffset >= (maxScroll - 2)
         property real bottomUnfold: atBottom ? 1.0 : 0.0
         Behavior on bottomUnfold {
-            NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.15 }
+            NumberAnimation { duration: 100; easing.type: Easing.OutQuad }
         }
 
         // scroll helper
@@ -440,12 +456,14 @@ PlasmoidItem {
                         return Math.min(startEdgeOpacity, endEdgeOpacity);
                     }
 
-                    // tilt angle calculation
+                    // tilt angle calculation with dynamic speed tilt
                     readonly property real tiltSpreadExponent: Math.max(1.0, 1.8 - (dockContainer.overflowCount * 0.2))
                     readonly property real dynamicBottomAngle: Math.min(40, 10 + (dockContainer.overflowCount * 8))
                     readonly property real safeFoldEnd: Math.max(0.0, foldFactorEnd)
 
-                    readonly property real baseAngle: (Math.pow(safeFoldEnd, tiltSpreadExponent) * dynamicBottomAngle) - (foldFactorStart * 40)
+                    readonly property real velocityTilt: isFoldedEnd ? (dockContainer.scrollVelocity * 2.5) : 0.0
+
+                    readonly property real baseAngle: (Math.pow(safeFoldEnd, tiltSpreadExponent) * dynamicBottomAngle) - (foldFactorStart * 40) + velocityTilt
                     readonly property real targetAngle: (index === dockContainer.draggingIndex || !dockContainer.autoFoldActive) ? 0 : (dockContainer.invertFold ? -baseAngle : baseAngle)
 
                     // tile scaling
@@ -553,7 +571,7 @@ PlasmoidItem {
                             }
                         }
 
-                        // audio badge (still broken)
+                        // audio badge
                         Rectangle {
                             visible: taskTile.isPlayingAudio
                             width: dockContainer.baseSize * 0.35
@@ -575,7 +593,7 @@ PlasmoidItem {
                             }
                         }
 
-                        // notification badge (also broken lmao)
+                        // notification badge
                         Rectangle {
                             visible: taskTile.notificationCount > 0
                             width: dockContainer.baseSize * 0.4
@@ -745,7 +763,6 @@ PlasmoidItem {
                                     if (taskTile.isGroup) {
                                         let childCount = tasksModel.rowCount(idx);
                                         if (childCount > 0) {
-                                            // window toggle logic
                                             let firstChildIdx = tasksModel.index(0, 0, idx);
                                             if (taskTile.isActiveWin) {
                                                 tasksModel.requestToggleMinimized(firstChildIdx);
